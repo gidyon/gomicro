@@ -14,10 +14,10 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"gidyon.io/gomicro/pkg/conn"
+	"github.com/gidyon/gomicro/pkg/conn"
 
-	http_middleware "gidyon.io/gomicro/pkg/http"
-	"gidyon.io/gomicro/utils/tlsutil"
+	http_middleware "github.com/gidyon/gomicro/pkg/http"
+	"github.com/gidyon/gomicro/utils/tlsutil"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"

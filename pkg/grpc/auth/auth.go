@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"gidyon.io/gomicro/utils/errs"
+	"github.com/gidyon/gomicro/utils/errs"
 
 	"github.com/Pallinder/go-randomdata"
 
