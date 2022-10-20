@@ -6,7 +6,8 @@ import (
 
 	// "bitbucket.org/onfon/gomicro/pkg/config"
 
-	http_middleware "bitbucket.org/onfon/gomicro/pkg/http"
+	http_middleware "gidyon/gomicro/pkg/http"
+
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/grpclog"
 

@@ -1,4 +1,4 @@
-module bitbucket.org/onfon/gomicro
+module gidyon/gomicro
 
 go 1.18
 
