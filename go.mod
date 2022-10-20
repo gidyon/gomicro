@@ -1,4 +1,4 @@
-module gidyon/gomicro
+module gidyon.io/gomicro
 
 go 1.18
 
