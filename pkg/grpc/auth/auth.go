@@ -6,7 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/onfon/gomicro/utils/errs"
+	"gidyon/gomicro/utils/errs"
+
 	"github.com/Pallinder/go-randomdata"
 
 	"github.com/golang-jwt/jwt"

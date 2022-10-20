@@ -14,9 +14,11 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"bitbucket.org/onfon/gomicro/pkg/conn"
-	http_middleware "bitbucket.org/onfon/gomicro/pkg/http"
-	"bitbucket.org/onfon/gomicro/utils/tlsutil"
+	"gidyon/gomicro/pkg/conn"
+
+	http_middleware "gidyon/gomicro/pkg/http"
+	"gidyon/gomicro/utils/tlsutil"
+
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc/reflection"
