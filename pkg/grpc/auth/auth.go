@@ -101,6 +101,11 @@ func (api *API) AuthorizeIds(ctx context.Context, ids ...string) (*Payload, erro
 	return nil, status.Errorf(codes.PermissionDenied, "permission denied for actors ids [%s]", strings.Join(ids, ", "))
 }
 
+// AddAdminGroups adds admin groups
+func (api *API) AddAdminGroups(groups ...string) {
+	api.adminsGroup = append(api.adminsGroup, groups...)
+}
+
 // AdminGroups retrieves `Admins groups` registered.
 func (api *API) AdminGroups() []string {
 	v := make([]string, 0, len(api.adminsGroup))
