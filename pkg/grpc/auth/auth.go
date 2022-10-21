@@ -139,6 +139,16 @@ func (api *API) GenTokenFromClaims(ctx context.Context, claims *Claims, expirati
 	return api.genTokenV2(ctx, claims, expirationTime.Unix(), api.signingKey)
 }
 
+// GetPayload retrives `Payload` from `Claims` in `claimsKey` of the `Context`
+func (api *API) GetPayload(ctx context.Context) (*Payload, error) {
+	claims, ok := ctx.Value(claimsKey).(*Claims)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "no claims found in token")
+	}
+
+	return claims.Payload, nil
+}
+
 // GetClaims retrives claims by reading the value of `claimsKey` in the `Context`
 func (api *API) GetClaims(ctx context.Context) (*Claims, error) {
 	claims, ok := ctx.Value(claimsKey).(*Claims)
