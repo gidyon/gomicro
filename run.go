@@ -16,7 +16,6 @@ import (
 
 	"github.com/gidyon/gomicro/pkg/conn"
 
-	http_middleware "github.com/gidyon/gomicro/pkg/http"
 	"github.com/gidyon/gomicro/utils/tlsutil"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -55,6 +54,18 @@ func (service *Service) Start(ctx context.Context, initFn func() error) {
 	handleErrs(initFn(), service.run(ctx))
 }
 
+// apply applies a chain of middleware in order
+func apply(handler http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
+	if len(middlewares) < 1 {
+		return handler
+	}
+	wrapped := handler
+	for i := len(middlewares) - 1; i >= 0; i-- {
+		wrapped = middlewares[i](wrapped)
+	}
+	return wrapped
+}
+
 // starts the servers
 func (service *Service) run(ctx context.Context) error {
 	fn := func() error {
@@ -72,7 +83,7 @@ func (service *Service) run(ctx context.Context) error {
 		service.AddEndpoint(service.options.RuntimeMuxEndpoint, service.runtimeMux)
 
 		// Apply any middlewares to the handler
-		handler := http_middleware.Apply(service.httpMux, service.httpMiddlewares...)
+		handler := apply(service.httpMux, service.httpMiddlewares...)
 
 		var ghandler http.Handler
 

@@ -6,8 +6,6 @@ import (
 
 	// "bitbucket.org/onfon/gomicro/pkg/config"
 
-	http_middleware "github.com/gidyon/gomicro/pkg/http"
-
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/grpclog"
 
@@ -29,7 +27,7 @@ type Service struct {
 	dialOptions              []grpc.DialOption
 	unaryClientInterceptors  []grpc.UnaryClientInterceptor
 	streamClientInterceptors []grpc.StreamClientInterceptor
-	httpMiddlewares          []http_middleware.Middleware
+	httpMiddlewares          []func(http.Handler) http.Handler
 	httpMux                  *http.ServeMux
 	runtimeMux               *runtime.ServeMux
 	shutdowns                []func() error
@@ -61,7 +59,7 @@ func NewService(opt *Options) (*Service, error) {
 
 	svc := &Service{
 		options:                  opt,
-		httpMiddlewares:          make([]http_middleware.Middleware, 0),
+		httpMiddlewares:          make([]func(http.Handler) http.Handler, 0),
 		httpMux:                  http.NewServeMux(),
 		runtimeMux:               runtime.NewServeMux(),
 		clientConn:               &grpc.ClientConn{},
@@ -100,7 +98,7 @@ func (service *Service) AddEndpointFunc(pattern string, handleFunc http.HandlerF
 }
 
 // AddHTTPMiddlewares adds http middlewares to the service
-func (service *Service) AddHTTPMiddlewares(middlewares ...http_middleware.Middleware) {
+func (service *Service) AddHTTPMiddlewares(middlewares ...func(http.Handler) http.Handler) {
 	service.httpMiddlewares = append(service.httpMiddlewares, middlewares...)
 }
 
