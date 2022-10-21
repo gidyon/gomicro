@@ -3,10 +3,8 @@ module github.com/gidyon/gomicro
 go 1.18
 
 require (
-	github.com/Pallinder/go-randomdata v1.2.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
-	github.com/gorilla/securecookie v1.1.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.10.3
 	github.com/rs/zerolog v1.28.0
