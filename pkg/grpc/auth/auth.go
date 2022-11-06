@@ -118,6 +118,11 @@ func (api *API) IsAdmin(group string) bool {
 	return matchGroup(group, api.adminsGroup) == nil
 }
 
+// GetSigningKey retrieves the signing key registered for the auth instance
+func (api *API) GetSigningKey() []byte {
+	return api.signingKey
+}
+
 // GenToken generates JWT token with given `payload` that expire after `expirationTime` elapses.
 //
 // It uses the receivers `SigningMethod` and `SigningKey` to sign the token.
@@ -163,7 +168,7 @@ func (api *API) GetClaims(ctx context.Context) (*Claims, error) {
 //
 // It uses the reciever `SigningKey` during parsing.
 func (api *API) GetClaimsFromJwt(jwt string) (*Claims, error) {
-	claims, err := api.parseToken(jwt)
+	claims, err := api.parseToken(jwt, api.signingKey)
 	if err != nil {
 		return nil, err
 	}
@@ -177,12 +182,12 @@ func (api *API) GetMetadataFromJwt(jwt string) (metadata.MD, error) {
 }
 
 // GetMetadataFromCtx retrieves metadata.MD object from `Context`
-func (api *API) GetMetadataFromCtx(ctx context.Context) (metadata.MD, error) {
-	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
-	if err != nil {
-		return nil, err
+func (api *API) GetMetadataFromCtx(ctx context.Context) metadata.MD {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return metadata.Pairs()
 	}
-	return metadata.Pairs(Header(), fmt.Sprintf("%s %s", Scheme(), token)), nil
+	return md
 }
 
 // Authenticator is the function that performs authentication
@@ -201,7 +206,24 @@ func (api *API) Authenticator(ctx context.Context) (context.Context, error) {
 		return nil, err
 	}
 
-	claims, err := api.parseToken(token)
+	claims, err := api.parseToken(token, api.signingKey)
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
+	}
+
+	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(claims))
+
+	return context.WithValue(ctx, claimsKey, claims), nil
+}
+
+// AuthenticatorWithKey works like Authenticator but allow users to pass in custome key for decoding jwt data
+func (api *API) AuthenticatorWithKey(ctx context.Context, signingKey []byte) (context.Context, error) {
+	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
+	if err != nil {
+		return nil, err
+	}
+
+	claims, err := api.parseToken(token, signingKey)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
 	}
@@ -216,7 +238,7 @@ func userClaimFromToken(claims *Claims) *Payload {
 }
 
 // parses a jwt token and return claims or error if token is invalid
-func (api *API) parseToken(tokenString string) (claims *Claims, err error) {
+func (api *API) parseToken(tokenString string, signingKey []byte) (claims *Claims, err error) {
 	// Handling any panic is good trust me!
 	defer func() {
 		if err2 := recover(); err2 != nil {
@@ -228,7 +250,7 @@ func (api *API) parseToken(tokenString string) (claims *Claims, err error) {
 		tokenString,
 		&Claims{},
 		func(token *jwt.Token) (interface{}, error) {
-			return api.signingKey, nil
+			return signingKey, nil
 		},
 	)
 	if err != nil {
