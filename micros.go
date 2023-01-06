@@ -45,7 +45,6 @@ type Options struct {
 	ServerReadTimeout       time.Duration
 	ServerWriteTimeout      time.Duration
 	ServerReadHeaderTimeout time.Duration
-	ServerTimeoutHandler    http.Handler
 	NowFunc                 func() time.Time
 	TLSEnabled              bool
 	TlSCertFile             string
