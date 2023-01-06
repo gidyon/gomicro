@@ -17,9 +17,10 @@ import (
 
 // DbPoolSettings contains options for customizing the connection pool
 type DbPoolSettings struct {
-	MaxIdleConns uint
-	MaxOpenConns uint
-	MaxLifetime  time.Duration
+	MaxIdleConns    uint
+	MaxOpenConns    uint
+	MaxLifetime     time.Duration
+	MaxIdleLifetime time.Duration
 }
 
 // DbOptions contains parameters for connecting to a SQL database
@@ -77,6 +78,9 @@ func openGorm(opt *DbOptions) (*gorm.DB, error) {
 		}
 		if opt.ConnPool.MaxLifetime != 0 {
 			sqlDB.SetConnMaxLifetime(opt.ConnPool.MaxLifetime)
+		}
+		if opt.ConnPool.MaxIdleLifetime != 0 {
+			sqlDB.SetConnMaxIdleTime(opt.ConnPool.MaxIdleLifetime)
 		}
 	}
 
