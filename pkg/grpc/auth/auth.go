@@ -21,6 +21,7 @@ type API struct {
 	issuer        string
 	audience      string
 	adminsGroup   []string
+	superAdmins   []string
 }
 
 // NewAPI creates a jwt authentication and authorization API using HS256 algorithm
@@ -42,6 +43,7 @@ func NewAPI(signingKey []byte, issuer, audience string) *API {
 		issuer:        issuer,
 		audience:      audience,
 		adminsGroup:   []string{},
+		superAdmins:   []string{},
 	}
 
 	return api
@@ -106,16 +108,36 @@ func (api *API) AddAdminGroups(groups ...string) {
 	api.adminsGroup = append(api.adminsGroup, groups...)
 }
 
-// AdminGroups retrieves `Admins groups` registered.
-func (api *API) AdminGroups() []string {
-	v := make([]string, 0, len(api.adminsGroup))
-	v = append(v, api.adminsGroup...)
-	return v
+// AddAdminGroups adds super admin groups
+func (api *API) AddSuperAdminGroups(groups ...string) {
+	api.superAdmins = append(api.superAdmins, groups...)
 }
 
-// IsAdmin checks whether the provided `gruop` belongs to the `Admins group`.
+// AdminGroups retrieves `Admins groups` registered.
+func (api *API) AdminGroups() []string {
+	groups := make([]string, 0, len(api.adminsGroup)+len(api.superAdmins))
+	for _, v := range api.adminsGroup {
+		groups = append(groups, v)
+	}
+	for _, v := range api.superAdmins {
+		groups = append(groups, v)
+	}
+	return groups
+}
+
+// IsAdmin checks whether the provided `group` belongs to the `Admins Groups`.
 func (api *API) IsAdmin(group string) bool {
-	return matchGroup(group, api.adminsGroup) == nil
+	return matchGroup(group, api.AdminGroups()) == nil
+}
+
+// IsAdmin checks whether the provided `group` belongs to the `Super Admin Groups`.
+func (api *API) IsSuperAdmin(group string) bool {
+	return matchGroup(group, api.superAdmins) == nil
+}
+
+// IsGroupAllowed checks whether group is in the list of allowed groups.
+func (api *API) IsGroupAllowed(group string, allowedGroups ...string) bool {
+	return matchGroup(group, allowedGroups) == nil
 }
 
 // GetSigningKey retrieves the signing key registered for the auth instance
