@@ -37,18 +37,20 @@ type Service struct {
 }
 
 type Options struct {
-	ServiceName        string
-	HttpPort           int
-	GrpcPort           int
-	Logger             grpclog.LoggerV2
-	RuntimeMuxEndpoint string
-	ServerReadTimeout  time.Duration
-	ServerWriteTimeout time.Duration
-	NowFunc            func() time.Time
-	TLSEnabled         bool
-	TlSCertFile        string
-	TlSKeyFile         string
-	TLSServerName      string
+	ServiceName             string
+	HttpPort                int
+	GrpcPort                int
+	Logger                  grpclog.LoggerV2
+	RuntimeMuxEndpoint      string
+	ServerReadTimeout       time.Duration
+	ServerWriteTimeout      time.Duration
+	ServerReadHeaderTimeout time.Duration
+	ServerTimeoutHandler    http.Handler
+	NowFunc                 func() time.Time
+	TLSEnabled              bool
+	TlSCertFile             string
+	TlSKeyFile              string
+	TLSServerName           string
 }
 
 // NewService create a micro-service utility store by parsing data from config. Pass nil logger to use default logger
