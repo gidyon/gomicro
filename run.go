@@ -48,7 +48,7 @@ func (service *Service) Initialize(ctx context.Context) {
 	service.init(ctx)
 }
 
-// Start opens connection to databases and external services, afterwards starting grpc and http server to serve requests.
+// Start starts grpc and http server to serve requests.
 func (service *Service) Start(ctx context.Context, initFn func() error) {
 	service.init(ctx)
 	handleErrs(initFn(), service.run(ctx))
