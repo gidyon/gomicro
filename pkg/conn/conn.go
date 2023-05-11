@@ -47,7 +47,7 @@ func openGorm(opt *DbOptions) (*gorm.DB, error) {
 	}
 
 	// add MySQL driver specific parameter to parse date/time
-	param := "charset=utf8&parseTime=true"
+	param := "charset=utf8mb4&parseTime=True"
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?%s",
 		opt.User,
