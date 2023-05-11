@@ -49,16 +49,16 @@ func NewAPI(signingKey []byte, issuer, audience string) *API {
 	return api
 }
 
-// AuthorizeGroups checks whether the claims `Group` in the context `metadata.MD Authorization JWT` is a member the allowed groups set
+// AuthorizeGroups checks whether the claims Group in the context metadata.MD Authorization JWT is a member the allowed groups set
 //
-// If it's a member, `Authorization` will succeed, otherwise it will fail with `codes.PermissionDenied`.
+// If it's a member, Authorization will succeed, otherwise it will fail with codes.PermissionDenied.
 //
-// The function will attempt to extract JWT token from gRPC metadata.MD `Authorization` key from the `Context`.
+// The function will attempt to extract JWT token from gRPC metadata.MD Authorization key from the Context.
 //
-// If getting metadata.MD object from `Context` fails i.e due to missing metadata.MD object OR missing `Authorization` key in the metadata.MD object,
-// the function will fail with `codes.Unauthenticated`
+// If getting metadata.MD object from Context fails i.e due to missing metadata.MD object OR missing Authorization key in the metadata.MD object,
+// the function will fail with codes.Unauthenticated
 //
-// It is expected that before calling this method, `Authentication` ought to have happened.
+// It is expected that before calling this method, Authentication ought to have happened.
 func (api *API) AuthorizeGroups(ctx context.Context, groups ...string) (*Payload, error) {
 	claims, ok := ctx.Value(claimsKey).(*Claims)
 	if !ok {
@@ -78,16 +78,16 @@ func (api *API) AuthorizeGroups(ctx context.Context, groups ...string) (*Payload
 	return claims.Payload, nil
 }
 
-// AuthorizeIds checks whether the claims `Id` in the context `metadata.MD Authorization JWT` is a member the allowed Ids set
+// AuthorizeIds checks whether the claims Id in the context metadata.MD Authorization JWT is a member the allowed Ids set
 //
-// If it's a member, `Authorization` will succeed, otherwise it will fail with `codes.PermissionDenied`.
+// If it's a member, Authorization will succeed, otherwise it will fail with codes.PermissionDenied.
 //
-// The function will attempt to extract JWT token from gRPC metadata.MD `Authorization` key from the `Context`.
+// The function will attempt to extract JWT token from gRPC metadata.MD Authorization key from the Context.
 //
-// If getting metadata.MD object from `Context` fails i.e due to missing metadata.MD object OR missing `Authorization` key in the metadata.MD object,
-// the function will fail with `codes.Unauthenticated`
+// If getting metadata.MD object from Context fails i.e due to missing metadata.MD object OR missing Authorization key in the metadata.MD object,
+// the function will fail with codes.Unauthenticated
 //
-// It is expected that before calling this method, `Authentication` ought to have happened.
+// It is expected that before calling this method, Authentication ought to have happened.
 func (api *API) AuthorizeIds(ctx context.Context, ids ...string) (*Payload, error) {
 	claims, ok := ctx.Value(claimsKey).(*Claims)
 	if !ok {
@@ -113,24 +113,20 @@ func (api *API) AddSuperAdminGroups(groups ...string) {
 	api.superAdmins = append(api.superAdmins, groups...)
 }
 
-// AdminGroups retrieves `Admins groups` registered.
+// AdminGroups retrieves Admins groups registered.
 func (api *API) AdminGroups() []string {
 	groups := make([]string, 0, len(api.adminsGroup)+len(api.superAdmins))
-	for _, v := range api.adminsGroup {
-		groups = append(groups, v)
-	}
-	for _, v := range api.superAdmins {
-		groups = append(groups, v)
-	}
+	groups = append(groups, api.adminsGroup...)
+	groups = append(groups, api.superAdmins...)
 	return groups
 }
 
-// IsAdmin checks whether the provided `group` belongs to the `Admins Groups`.
+// IsAdmin checks whether the provided group belongs to the Admins Groups.
 func (api *API) IsAdmin(group string) bool {
 	return matchGroup(group, api.AdminGroups()) == nil
 }
 
-// IsAdmin checks whether the provided `group` belongs to the `Super Admin Groups`.
+// IsAdmin checks whether the provided group belongs to the Super Admin Groups.
 func (api *API) IsSuperAdmin(group string) bool {
 	return matchGroup(group, api.superAdmins) == nil
 }
@@ -145,28 +141,28 @@ func (api *API) GetSigningKey() []byte {
 	return api.signingKey
 }
 
-// GenToken generates JWT token with given `payload` that expire after `expirationTime` elapses.
+// GenToken generates JWT token with given payload that expire after expirationTime elapses.
 //
-// It uses the receivers `SigningMethod` and `SigningKey` to sign the token.
+// It uses the receivers SigningMethod and SigningKey to sign the token.
 func (api *API) GenToken(ctx context.Context, payload *Payload, expirationTime time.Time) (string, error) {
 	return api.genToken(ctx, payload, expirationTime.Unix())
 }
 
-// GenTokenUsingKey generates JWT token with given `payload` that expire after `expirationTime` elapses.
+// GenTokenUsingKey generates JWT token with given payload that expire after expirationTime elapses.
 //
-// It uses the provided `signingKey` and the receiver `SigningMethod` to sign the token.
+// It uses the provided signingKey and the receiver SigningMethod to sign the token.
 func (api *API) GenTokenUsingKey(ctx context.Context, claims *Claims, expirationTime time.Time, signingKey []byte) (string, error) {
 	return api.genTokenV2(ctx, claims, expirationTime.Unix(), signingKey)
 }
 
-// GenTokenFromClaims generates JWT token with given `claims` that expire after `expirationTime` elapses.
+// GenTokenFromClaims generates JWT token with given claims that expire after expirationTime elapses.
 //
-// It uses the receivers `SigningMethod` and `SigningKey` to sign the token.
+// It uses the receivers SigningMethod and default secret to sign the token.
 func (api *API) GenTokenFromClaims(ctx context.Context, claims *Claims, expirationTime time.Time) (string, error) {
 	return api.genTokenV2(ctx, claims, expirationTime.Unix(), api.signingKey)
 }
 
-// GetPayload retrives `Payload` from `Claims` in `claimsKey` of the `Context`
+// GetPayload retrives Payload from Claims in claimsKey of the Context
 func (api *API) GetPayload(ctx context.Context) (*Payload, error) {
 	claims, ok := ctx.Value(claimsKey).(*Claims)
 	if !ok {
@@ -176,7 +172,7 @@ func (api *API) GetPayload(ctx context.Context) (*Payload, error) {
 	return claims.Payload, nil
 }
 
-// GetClaims retrives claims by reading the value of `claimsKey` in the `Context`
+// GetClaims retrives claims by reading the value of claimsKey in the Context
 func (api *API) GetClaims(ctx context.Context) (*Claims, error) {
 	claims, ok := ctx.Value(claimsKey).(*Claims)
 	if !ok {
@@ -186,9 +182,9 @@ func (api *API) GetClaims(ctx context.Context) (*Claims, error) {
 	return claims, nil
 }
 
-// GetClaimsFromJwt retrives claims by parsing the `jwt` string.
+// GetClaimsFromJwt retrives claims by parsing the jwt string.
 //
-// It uses the reciever `SigningKey` during parsing.
+// It uses the reciever SigningKey during parsing.
 func (api *API) GetClaimsFromJwt(jwt string) (*Claims, error) {
 	claims, err := api.parseToken(jwt, api.signingKey)
 	if err != nil {
@@ -198,12 +194,12 @@ func (api *API) GetClaimsFromJwt(jwt string) (*Claims, error) {
 	return claims, nil
 }
 
-// GetMetadataFromJwt creates a metadata.MD object from `jwt` string.
+// GetMetadataFromJwt creates a metadata.MD object from jwt string.
 func (api *API) GetMetadataFromJwt(jwt string) (metadata.MD, error) {
 	return metadata.Pairs(Header(), fmt.Sprintf("%s %s", Scheme(), jwt)), nil
 }
 
-// GetMetadataFromCtx retrieves metadata.MD object from `Context`
+// GetMetadataFromCtx retrieves metadata.MD object from Context
 func (api *API) GetMetadataFromCtx(ctx context.Context) metadata.MD {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -214,14 +210,14 @@ func (api *API) GetMetadataFromCtx(ctx context.Context) metadata.MD {
 
 // Authenticator is the function that performs authentication
 //
-// The passed in `Context` will contain the gRPC metadata.MD object (for header-based authentication) and
-// the peer.Peer information that can contain transport-based credentials (e.g. `credentials.AuthInfo`).
+// The passed in Context will contain the gRPC metadata.MD object (for header-based authentication) and
+// the peer.Peer information that can contain transport-based credentials (e.g. credentials.AuthInfo).
 //
-// The returned context will be propagated to handlers, allowing user changes to `Context`. However,
-// please make sure that the `Context` returned is a child `Context` of the one passed in.
+// The returned context will be propagated to handlers, allowing user changes to Context. However,
+// please make sure that the Context returned is a child Context of the one passed in.
 //
-// If error is returned, its `grpc.Code()` will be returned to the user as well as the verbatim message.
-// Please make sure you use `codes.Unauthenticated` (lacking auth) and `codes.PermissionDenied`
+// If error is returned, its grpc.Code() will be returned to the user as well as the verbatim message.
+// Please make sure you use codes.Unauthenticated (lacking auth) and codes.PermissionDenied
 func (api *API) Authenticator(ctx context.Context) (context.Context, error) {
 	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
 	if err != nil {
@@ -230,7 +226,8 @@ func (api *API) Authenticator(ctx context.Context) (context.Context, error) {
 
 	claims, err := api.parseToken(token, api.signingKey)
 	if err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
+		fmt.Println(err)
+		return nil, status.Errorf(codes.Unauthenticated, "session expired")
 	}
 
 	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(claims))
@@ -247,7 +244,7 @@ func (api *API) AuthenticatorWithKey(ctx context.Context, signingKey []byte) (co
 
 	claims, err := api.parseToken(token, signingKey)
 	if err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "invalid auth token: %v", err)
+		return nil, status.Errorf(codes.Unauthenticated, "session expired")
 	}
 
 	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(claims))
@@ -276,9 +273,7 @@ func (api *API) parseToken(tokenString string, signingKey []byte) (claims *Claim
 		},
 	)
 	if err != nil {
-		return nil, status.Errorf(
-			codes.Unauthenticated, "failed to parse token with claims: %v", err,
-		)
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
