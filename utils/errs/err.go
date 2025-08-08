@@ -44,7 +44,7 @@ func ConvertingType(err error, from, to string) error {
 
 // IncorrectVal returns a status error indicating val was incorrect
 func IncorrectVal(val string) error {
-	return status.Errorf(codes.InvalidArgument, "incorrect value for %q", val)
+	return status.Errorf(codes.InvalidArgument, "incorrect value for %s", val)
 }
 
 // WriteFailed returns a status error for a write operation error
