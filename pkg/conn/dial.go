@@ -2,9 +2,6 @@ package conn
 
 import (
 	"context"
-
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-
 	"strings"
 
 	"google.golang.org/grpc"
@@ -18,25 +15,23 @@ type GrpcDialOptions struct {
 	K8Service   bool
 }
 
-// DialGrpcService dials to a grpc service
 func DialGrpcService(ctx context.Context, opt *GrpcDialOptions) (*grpc.ClientConn, error) {
-	var (
-		dopts = []grpc.DialOption{
-			grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [ { "round_robin": {} } ] }`),
-			// Load balancer scheme
-			grpc.WithDisableServiceConfig(),
-			// Other interceptors
-			grpc.WithUnaryInterceptor(
-				grpc_middleware.ChainUnaryClient(
-					waitForReadyInterceptor,
-				),
-			),
-		}
-	)
 
+	// base client opts
+	dopts := []grpc.DialOption{
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [ { "round_robin": {} } ] }`),
+
+		grpc.WithDisableServiceConfig(),
+
+		grpc.WithChainUnaryInterceptor(
+			waitForReadyUnaryInterceptor,
+		),
+	}
+
+	// add user dial options
 	dopts = append(dopts, opt.DialOptions...)
 
-	// Address for dialing the kubernetes service
+	// rewrite address format
 	if opt.K8Service {
 		opt.Address = strings.TrimSuffix(opt.Address, "dns:///")
 		opt.Address = "dns:///" + opt.Address
@@ -45,10 +40,10 @@ func DialGrpcService(ctx context.Context, opt *GrpcDialOptions) (*grpc.ClientCon
 		opt.Address = "passthrough:///" + opt.Address
 	}
 
-	return grpc.DialContext(ctx, opt.Address, dopts...)
+	return grpc.NewClient(opt.Address, dopts...)
 }
 
-func waitForReadyInterceptor(
+func waitForReadyUnaryInterceptor(
 	ctx context.Context,
 	method string,
 	req, reply interface{},
@@ -56,5 +51,7 @@ func waitForReadyInterceptor(
 	invoker grpc.UnaryInvoker,
 	opts ...grpc.CallOption,
 ) error {
-	return invoker(ctx, method, req, reply, cc, append(opts, grpc.WaitForReady(true))...)
+	return invoker(ctx, method, req, reply, cc,
+		append(opts, grpc.WaitForReady(true))...,
+	)
 }

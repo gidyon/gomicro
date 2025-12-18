@@ -1,18 +1,15 @@
 package gomicro
 
 import (
+	"net/http"
 	"sync"
 	"time"
 
 	// "bitbucket.org/onfon/gomicro/pkg/config"
-
-	"github.com/rs/zerolog"
-	"google.golang.org/grpc/grpclog"
-
-	"net/http"
-
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
 )
 
 // Service contains API clients, connections and options for bootstrapping a micro-service.

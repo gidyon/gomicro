@@ -7,12 +7,10 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-
-	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/auth"
-	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 )
 
 type API struct {
@@ -230,8 +228,6 @@ func (api *API) Authenticator(ctx context.Context) (context.Context, error) {
 		return nil, status.Errorf(codes.Unauthenticated, "session expired")
 	}
 
-	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(claims))
-
 	return context.WithValue(ctx, claimsKey, claims), nil
 }
 
@@ -246,8 +242,6 @@ func (api *API) AuthenticatorWithKey(ctx context.Context, signingKey []byte) (co
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "session expired")
 	}
-
-	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(claims))
 
 	return context.WithValue(ctx, claimsKey, claims), nil
 }

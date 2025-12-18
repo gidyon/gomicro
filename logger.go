@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"google.golang.org/grpc/grpclog"
-
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/grpclog"
 )
 
 type logger struct {

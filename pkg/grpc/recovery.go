@@ -3,24 +3,30 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
 )
 
+// When panic happens, convert panic → gRPC error.
 func customFunc(ctx context.Context, p interface{}) error {
 	return fmt.Errorf("recovering from panic: %v", p)
 }
 
-// AddRecovery recovers from gRPC panics from handlers
+// AddRecovery recovers from gRPC handler panics.
 func AddRecovery() ([]grpc.UnaryServerInterceptor, []grpc.StreamServerInterceptor) {
-	// Shared option for the logger, with a custom gRPC code to log level function.
-	opt := grpc_recovery.WithRecoveryHandlerContext(customFunc)
 
-	// Recovery handlers should typically be last in the chain so that other middleware
-	// (e.g. logging) can operate on the recovered state instead of being directly affected by any panic
-	return []grpc.UnaryServerInterceptor{
-			grpc_recovery.UnaryServerInterceptor(opt),
-		}, []grpc.StreamServerInterceptor{
-			grpc_recovery.StreamServerInterceptor(opt),
-		}
+	opts := []grpc_recovery.Option{
+		grpc_recovery.WithRecoveryHandlerContext(customFunc),
+	}
+
+	unary := []grpc.UnaryServerInterceptor{
+		grpc_recovery.UnaryServerInterceptor(opts...),
+	}
+
+	stream := []grpc.StreamServerInterceptor{
+		grpc_recovery.StreamServerInterceptor(opts...),
+	}
+
+	return unary, stream
 }

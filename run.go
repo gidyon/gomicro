@@ -11,18 +11,14 @@ import (
 	"os/signal"
 	"strings"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-
-	"github.com/gidyon/gomicro/pkg/conn"
-
-	"github.com/gidyon/gomicro/utils/tlsutil"
-
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc/reflection"
 
-	"google.golang.org/grpc"
+	"github.com/gidyon/gomicro/pkg/conn"
+	"github.com/gidyon/gomicro/utils/tlsutil"
 )
 
 // panic after encountering first non nil error
@@ -236,23 +232,19 @@ func (service *Service) initGRPC(ctx context.Context) error {
 		return invoker(ctx, method, req, reply, cc, append(opts, grpc.WaitForReady(true))...)
 	}
 
-	// Add client unary interceptos
+	// Add client unary interceptors
 	unaryClientInterceptors := []grpc.UnaryClientInterceptor{waitForReadyUnaryInterceptor}
 	unaryClientInterceptors = append(unaryClientInterceptors, service.unaryClientInterceptors...)
 
-	// Add client streaming interceptos
+	// Add client stream interceptors
 	streamClientInterceptors := make([]grpc.StreamClientInterceptor, 0)
 	streamClientInterceptors = append(streamClientInterceptors, service.streamClientInterceptors...)
 
-	// Add inteceptors as dial option
-	service.dialOptions = append(service.dialOptions, []grpc.DialOption{
-		grpc.WithUnaryInterceptor(
-			grpc_middleware.ChainUnaryClient(unaryClientInterceptors...),
-		),
-		grpc.WithStreamInterceptor(
-			grpc_middleware.ChainStreamClient(streamClientInterceptors...),
-		),
-	}...)
+	// Add interceptors as dial options using built-in chaining
+	service.dialOptions = append(service.dialOptions,
+		grpc.WithChainUnaryInterceptor(unaryClientInterceptors...),
+		grpc.WithChainStreamInterceptor(streamClientInterceptors...),
+	)
 
 	// client connection to the reverse gateway
 	service.clientConn, err = conn.DialGrpcService(context.Background(), &conn.GrpcDialOptions{
@@ -279,9 +271,13 @@ func (service *Service) initGRPC(ctx context.Context) error {
 
 	// Append interceptors as server options
 	service.serverOptions = append(
-		service.serverOptions, grpc_middleware.WithUnaryServerChain(service.unaryInterceptors...))
+		service.serverOptions,
+		grpc.ChainUnaryInterceptor(service.unaryInterceptors...),
+	)
 	service.serverOptions = append(
-		service.serverOptions, grpc_middleware.WithStreamServerChain(service.streamInterceptors...))
+		service.serverOptions,
+		grpc.ChainStreamInterceptor(service.streamInterceptors...),
+	)
 
 	service.gRPCServer = grpc.NewServer(service.serverOptions...)
 
