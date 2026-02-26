@@ -113,7 +113,7 @@ func (api *API) AuthorizeIds(ctx context.Context, ids ...string) (*Payload, erro
 		}
 	}
 
-	return nil, status.Errorf(codes.PermissionDenied, "permission denied for actors ids [%s]", strings.Join(ids, ", "))
+	return nil, status.Errorf(codes.PermissionDenied, "permission denied: actor id %s is not in allowed list [%s]", claims.ID, strings.Join(ids, ", "))
 }
 
 // AddAdminGroups adds admin groups
@@ -232,35 +232,15 @@ func (api *API) GetMetadataFromCtx(ctx context.Context) metadata.MD {
 // If error is returned, its grpc.Code() will be returned to the user as well as the verbatim message.
 // Please make sure you use codes.Unauthenticated (lacking auth) and codes.PermissionDenied
 func (api *API) Authenticator(ctx context.Context) (context.Context, error) {
-	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
-	if err != nil {
-		return nil, err
-	}
-
-	claims, err := api.parseToken(token, api.signingKey)
-	if err != nil {
-		fmt.Println(err)
-		return nil, status.Errorf(codes.Unauthenticated, "session expired")
-	}
-
-	// Fetch additional payload data if a provider is configured and ID is present
-	if api.payloadProvider != nil && claims.ID != "" {
-		if fullPayload, err := api.payloadProvider.GetPayload(ctx, claims.ID); err == nil && fullPayload != nil {
-			claims.Payload.Names = fullPayload.Names
-			claims.Payload.PhoneNumber = fullPayload.PhoneNumber
-			claims.Payload.EmailAddress = fullPayload.EmailAddress
-			claims.Payload.Group = fullPayload.Group
-			claims.Payload.Roles = fullPayload.Roles
-		}
-	}
-
-	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(claims))
-
-	return context.WithValue(ctx, claimsKey, claims), nil
+	return api.authenticate(ctx, api.signingKey)
 }
 
 // AuthenticatorWithKey works like Authenticator but allow users to pass in custome key for decoding jwt data
 func (api *API) AuthenticatorWithKey(ctx context.Context, signingKey []byte) (context.Context, error) {
+	return api.authenticate(ctx, signingKey)
+}
+
+func (api *API) authenticate(ctx context.Context, signingKey []byte) (context.Context, error) {
 	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
 	if err != nil {
 		return nil, err
@@ -272,7 +252,7 @@ func (api *API) AuthenticatorWithKey(ctx context.Context, signingKey []byte) (co
 	}
 
 	// Fetch additional payload data if a provider is configured and ID is present
-	if api.payloadProvider != nil && claims.ID != "" {
+	if api.payloadProvider != nil && claims.Payload != nil && claims.ID != "" {
 		if fullPayload, err := api.payloadProvider.GetPayload(ctx, claims.ID); err == nil && fullPayload != nil {
 			claims.Payload.Names = fullPayload.Names
 			claims.Payload.PhoneNumber = fullPayload.PhoneNumber
@@ -302,7 +282,7 @@ func (api *API) parseToken(tokenString string, signingKey []byte) (claims *Claim
 
 	token, err := jwt.ParseWithClaims(
 		tokenString,
-		&Claims{},
+		&Claims{Payload: &Payload{}},
 		func(token *jwt.Token) (interface{}, error) {
 			return signingKey, nil
 		},
@@ -328,7 +308,7 @@ func matchGroup(claimGroup string, groups []string) error {
 			return nil
 		}
 	}
-	return status.Errorf(codes.PermissionDenied, "permission denied for group %s", claimGroup)
+	return status.Errorf(codes.PermissionDenied, "permission denied: group %s is not in allowed list [%s]", claimGroup, strings.Join(groups, ", "))
 }
 
 func matchGroups(claimGroups []string, groups []string) error {
@@ -339,5 +319,5 @@ func matchGroups(claimGroups []string, groups []string) error {
 			}
 		}
 	}
-	return status.Errorf(codes.PermissionDenied, "permission denied for groups %s", strings.Join(claimGroups, ","))
+	return status.Errorf(codes.PermissionDenied, "permission denied: none of the groups [%s] are in allowed list [%s]", strings.Join(claimGroups, ", "), strings.Join(groups, ", "))
 }
