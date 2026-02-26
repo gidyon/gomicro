@@ -56,7 +56,8 @@ func (api *API) genTokenV2(_ context.Context, claims *Claims, expires int64, sig
 		}
 	}()
 
-	token := jwt.NewWithClaims(api.signingMethod, *claims)
+	claims.ExpiresAt = expires
+	token := jwt.NewWithClaims(api.signingMethod, claims)
 
 	token.Header["kid"] = claims.ProjectID
 
