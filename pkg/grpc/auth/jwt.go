@@ -17,6 +17,7 @@ type Payload struct {
 	EmailAddress string   `json:"-"`
 	Group        string   `json:"-"`
 	Roles        []string `json:"-"`
+	ExternalID   string   `json:"-"`
 }
 
 // Claims contains JWT claims information

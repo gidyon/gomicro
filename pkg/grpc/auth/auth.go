@@ -259,6 +259,7 @@ func (api *API) authenticate(ctx context.Context, signingKey []byte) (context.Co
 			claims.Payload.EmailAddress = fullPayload.EmailAddress
 			claims.Payload.Group = fullPayload.Group
 			claims.Payload.Roles = fullPayload.Roles
+			claims.Payload.ExternalID = fullPayload.ExternalID
 		}
 	}
 
