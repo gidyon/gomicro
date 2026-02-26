@@ -233,7 +233,7 @@ func TestAuthenticator(t *testing.T) {
 	t.Run("With PayloadProvider", func(t *testing.T) {
 		api.SetPayloadProvider(&mockPayloadProvider{
 			getPayloadFunc: func(ctx context.Context, id string) (*Payload, error) {
-				return &Payload{ID: id, Group: "DYNAMIC_GROUP"}, nil
+				return &Payload{ID: id, Group: "DYNAMIC_GROUP", ExternalID: "external-123"}, nil
 			},
 		})
 		defer api.SetPayloadProvider(nil)
@@ -250,6 +250,9 @@ func TestAuthenticator(t *testing.T) {
 		claims, _ := api.GetClaims(newCtx)
 		if claims.Group != "DYNAMIC_GROUP" {
 			t.Errorf("expected Group DYNAMIC_GROUP, got %s", claims.Group)
+		}
+		if claims.ExternalID != "external-123" {
+			t.Errorf("expected ExternalID external-123, got %s", claims.ExternalID)
 		}
 	})
 }
