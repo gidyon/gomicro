@@ -10,13 +10,13 @@ import (
 
 // Payload contains jwt payload
 type Payload struct {
-	ID           string
-	ProjectID    string
-	Names        string
-	PhoneNumber  string
-	EmailAddress string
-	Group        string
-	Roles        []string
+	ID           string   `json:"id"`
+	ProjectID    string   `json:"project_id"`
+	Names        string   `json:"-"`
+	PhoneNumber  string   `json:"-"`
+	EmailAddress string   `json:"-"`
+	Group        string   `json:"-"`
+	Roles        []string `json:"-"`
 }
 
 // Claims contains JWT claims information
@@ -25,7 +25,7 @@ type Claims struct {
 	jwt.StandardClaims
 }
 
-func (api *API) genToken(ctx context.Context, payload *Payload, expires int64) (tokenStr string, err error) {
+func (api *API) genToken(_ context.Context, payload *Payload, expires int64) (tokenStr string, err error) {
 	defer func() {
 		if err2 := recover(); err2 != nil {
 			err = fmt.Errorf("%v", err2)
@@ -49,7 +49,7 @@ func (api *API) genToken(ctx context.Context, payload *Payload, expires int64) (
 	return token.SignedString(api.signingKey)
 }
 
-func (api *API) genTokenV2(ctx context.Context, claims *Claims, expires int64, signingKey []byte) (tokenStr string, err error) {
+func (api *API) genTokenV2(_ context.Context, claims *Claims, expires int64, signingKey []byte) (tokenStr string, err error) {
 	defer func() {
 		if err2 := recover(); err2 != nil {
 			err = fmt.Errorf("%v", err2)

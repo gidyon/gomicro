@@ -16,12 +16,19 @@ import (
 )
 
 type API struct {
-	signingMethod jwt.SigningMethod
-	signingKey    []byte
-	issuer        string
-	audience      string
-	adminsGroup   []string
-	superAdmins   []string
+	signingMethod   jwt.SigningMethod
+	signingKey      []byte
+	issuer          string
+	audience        string
+	adminsGroup     []string
+	superAdmins     []string
+	payloadProvider PayloadProvider
+}
+
+// PayloadProvider defines an interface for fetching full payload details
+// (e.g. from MySQL/Redis) when the JWT only contains the user ID.
+type PayloadProvider interface {
+	GetPayload(ctx context.Context, id string) (*Payload, error)
 }
 
 // NewAPI creates a jwt authentication and authorization API using HS256 algorithm
@@ -47,6 +54,12 @@ func NewAPI(signingKey []byte, issuer, audience string) *API {
 	}
 
 	return api
+}
+
+// SetPayloadProvider sets the provider used to fetch full payload data (e.g. from MySQL/Redis)
+// for JWTs that only contain the user ID.
+func (api *API) SetPayloadProvider(provider PayloadProvider) {
+	api.payloadProvider = provider
 }
 
 // AuthorizeGroups checks whether the claims Group in the context metadata.MD Authorization JWT is a member the allowed groups set
@@ -230,6 +243,17 @@ func (api *API) Authenticator(ctx context.Context) (context.Context, error) {
 		return nil, status.Errorf(codes.Unauthenticated, "session expired")
 	}
 
+	// Fetch additional payload data if a provider is configured and ID is present
+	if api.payloadProvider != nil && claims.ID != "" {
+		if fullPayload, err := api.payloadProvider.GetPayload(ctx, claims.ID); err == nil && fullPayload != nil {
+			claims.Payload.Names = fullPayload.Names
+			claims.Payload.PhoneNumber = fullPayload.PhoneNumber
+			claims.Payload.EmailAddress = fullPayload.EmailAddress
+			claims.Payload.Group = fullPayload.Group
+			claims.Payload.Roles = fullPayload.Roles
+		}
+	}
+
 	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(claims))
 
 	return context.WithValue(ctx, claimsKey, claims), nil
@@ -245,6 +269,17 @@ func (api *API) AuthenticatorWithKey(ctx context.Context, signingKey []byte) (co
 	claims, err := api.parseToken(token, signingKey)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "session expired")
+	}
+
+	// Fetch additional payload data if a provider is configured and ID is present
+	if api.payloadProvider != nil && claims.ID != "" {
+		if fullPayload, err := api.payloadProvider.GetPayload(ctx, claims.ID); err == nil && fullPayload != nil {
+			claims.Payload.Names = fullPayload.Names
+			claims.Payload.PhoneNumber = fullPayload.PhoneNumber
+			claims.Payload.EmailAddress = fullPayload.EmailAddress
+			claims.Payload.Group = fullPayload.Group
+			claims.Payload.Roles = fullPayload.Roles
+		}
 	}
 
 	grpc_ctxtags.Extract(ctx).Set("auth.sub", userClaimFromToken(claims))
