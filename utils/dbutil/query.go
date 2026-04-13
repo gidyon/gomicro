@@ -9,12 +9,16 @@ func ParseQuery(query string, stopWords ...string) string {
 	searchQueries := strings.Split(query, " ")
 	parsedQueries := make([]string, 0, len(searchQueries))
 	for _, queryToken := range searchQueries {
+		queryToken = strings.TrimSpace(queryToken)
+		if queryToken == "" {
+			continue
+		}
 		if containStopWord(queryToken, stopWords) {
 			continue
 		}
 		parsedQueries = append(parsedQueries, queryToken+"*")
 	}
-	return "+" + strings.Join(parsedQueries, " ")
+	return strings.Join(parsedQueries, " ")
 }
 
 func containStopWord(token string, stopWords []string) bool {

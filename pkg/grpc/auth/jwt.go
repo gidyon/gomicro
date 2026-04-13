@@ -27,6 +27,10 @@ type Claims struct {
 }
 
 func (api *API) genToken(_ context.Context, payload *Payload, expires int64) (tokenStr string, err error) {
+	if payload == nil {
+		return "", fmt.Errorf("nil payload not allowed")
+	}
+
 	defer func() {
 		if err2 := recover(); err2 != nil {
 			err = fmt.Errorf("%v", err2)
@@ -51,6 +55,16 @@ func (api *API) genToken(_ context.Context, payload *Payload, expires int64) (to
 }
 
 func (api *API) genTokenV2(_ context.Context, claims *Claims, expires int64, signingKey []byte) (tokenStr string, err error) {
+	if claims == nil {
+		return "", fmt.Errorf("nil claims not allowed")
+	}
+	if claims.Payload == nil {
+		claims.Payload = &Payload{}
+	}
+	if len(signingKey) == 0 {
+		return "", fmt.Errorf("missing signing key")
+	}
+
 	defer func() {
 		if err2 := recover(); err2 != nil {
 			err = fmt.Errorf("%v", err2)

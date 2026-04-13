@@ -3,13 +3,14 @@ package gomicro
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -36,6 +37,9 @@ func handleErrs(errs ...error) {
 
 // initializes service without starting it.
 func (service *Service) init(ctx context.Context) {
+	service.ensureDefaults()
+	ctx = normalizeContext(ctx)
+
 	service.initOnceFn.Do(func() {
 		handleErrs(
 			service.initGRPC(ctx),
@@ -50,8 +54,12 @@ func (service *Service) Initialize(ctx context.Context) {
 
 // Start starts grpc and http server to serve requests.
 func (service *Service) Start(ctx context.Context, initFn func() error) {
+	ctx = normalizeContext(ctx)
 	service.init(ctx)
-	handleErrs(initFn(), service.run(ctx))
+	if initFn != nil {
+		handleErrs(initFn())
+	}
+	handleErrs(service.run(ctx))
 }
 
 // apply applies a chain of middleware in order
@@ -68,6 +76,9 @@ func apply(handler http.Handler, middlewares ...func(http.Handler) http.Handler)
 
 // starts the servers
 func (service *Service) run(ctx context.Context) error {
+	service.ensureDefaults()
+	ctx = normalizeContext(ctx)
+
 	fn := func() error {
 		defer func() {
 			var err error
@@ -76,6 +87,9 @@ func (service *Service) run(ctx context.Context) error {
 				if err != nil {
 					service.options.Logger.Errorln(err)
 				}
+			}
+			if err := service.closeClientConn(); err != nil {
+				service.options.Logger.Errorln(err)
 			}
 		}()
 
@@ -104,15 +118,19 @@ func (service *Service) run(ctx context.Context) error {
 
 		// Graceful shutdown of server
 		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(c)
+		serverErr := make(chan error, 2)
 		go func() {
-			for range c {
-				service.options.Logger.Warning("shutting down service ...")
-				service.gRPCServer.Stop()
-				log.Fatalln(httpServer.Shutdown(ctx))
-
-				<-ctx.Done()
+			select {
+			case <-ctx.Done():
+			case <-c:
 			}
+			service.options.Logger.Warning("shutting down service ...")
+			service.gRPCServer.GracefulStop()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
+			defer cancel()
+			serverErr <- httpServer.Shutdown(shutdownCtx)
 		}()
 
 		lis, err := net.Listen("tcp", fmt.Sprintf(":%d", service.options.HttpPort))
@@ -144,13 +162,24 @@ func (service *Service) run(ctx context.Context) error {
 			// Note: The call to serve grpc must be inside a goroutine; don't do [go service.gRPCServer.Serve(glis)]
 			go func() {
 				err := service.gRPCServer.Serve(glis)
-				if err != nil {
-					service.options.Logger.Errorln(err)
+				if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+					serverErr <- err
 				}
 			}()
 
 			// Serve http insecurely
-			return httpServer.Serve(lis)
+			err = httpServer.Serve(lis)
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+			select {
+			case err := <-serverErr:
+				if err != nil && !errors.Is(err, http.ErrServerClosed) {
+					return err
+				}
+			default:
+			}
+			return nil
 		}
 
 		// Get PK for server
@@ -161,17 +190,27 @@ func (service *Service) run(ctx context.Context) error {
 
 		// Create tls object
 		tlsConfig := &tls.Config{
-			NextProtos:         []string{"h2", "http/1.1", "http/1.2"},
-			MinVersion:         tls.VersionTLS10,
-			MaxVersion:         tls.VersionTLS13,
-			ClientAuth:         tls.VerifyClientCertIfGiven,
-			ClientCAs:          certPool,
-			Certificates:       []tls.Certificate{*cert},
-			InsecureSkipVerify: true,
+			NextProtos:   []string{"h2", "http/1.1"},
+			MinVersion:   tls.VersionTLS12,
+			MaxVersion:   tls.VersionTLS13,
+			ClientAuth:   tls.NoClientCert,
+			ClientCAs:    certPool,
+			Certificates: []tls.Certificate{*cert},
 		}
 
 		// Serve tls
-		return httpServer.Serve(tls.NewListener(lis, tlsConfig))
+		err = httpServer.Serve(tls.NewListener(lis, tlsConfig))
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		select {
+		case err := <-serverErr:
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+		default:
+		}
+		return nil
 	}
 
 	var err error
@@ -186,7 +225,7 @@ func (service *Service) run(ctx context.Context) error {
 // connections or otherHandler otherwise.
 func grpcHandlerFunc(grpcServer *grpc.Server, otherHandler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.ProtoMajor == 2 && strings.Contains(r.Header.Get("Content-Type"), "application/grpc") {
+		if grpcServer != nil && r.ProtoMajor == 2 && strings.Contains(r.Header.Get("Content-Type"), "application/grpc") {
 			grpcServer.ServeHTTP(w, r)
 		} else {
 			otherHandler.ServeHTTP(w, r)
@@ -198,11 +237,10 @@ func grpcHandlerFunc(grpcServer *grpc.Server, otherHandler http.Handler) http.Ha
 // The method must be called before registering anything on the gRPC server or passing options to the gRPC client.
 // When this method has been called, subsequent calls to update interceptors becomes stale.
 func (service *Service) initGRPC(ctx context.Context) error {
-	// ============================= Update runtime mux endpoint =============================
-	if service.options.RuntimeMuxEndpoint == "" {
-		service.options.RuntimeMuxEndpoint = "/"
-	}
+	service.ensureDefaults()
+	ctx = normalizeContext(ctx)
 
+	// ============================= Update runtime mux endpoint =============================
 	// Apply servemux options to runtime muxer
 	service.runtimeMux = runtime.NewServeMux(service.serveMuxOptions...)
 
@@ -213,6 +251,9 @@ func (service *Service) initGRPC(ctx context.Context) error {
 	)
 
 	if service.options.TLSEnabled {
+		if service.options.TlSCertFile == "" || service.options.TlSKeyFile == "" {
+			return fmt.Errorf("tls is enabled but certificate or key file is missing")
+		}
 		creds, err := credentials.NewClientTLSFromFile(service.options.TlSCertFile, service.options.TLSServerName)
 		if err != nil {
 			return fmt.Errorf("failed to create tls config for %s service: %v", service.options.TLSServerName, err)
@@ -255,7 +296,7 @@ func (service *Service) initGRPC(ctx context.Context) error {
 	}...)
 
 	// client connection to the reverse gateway
-	service.clientConn, err = conn.DialGrpcService(context.Background(), &conn.GrpcDialOptions{
+	service.clientConn, err = conn.DialGrpcService(ctx, &conn.GrpcDialOptions{
 		ServiceName: "self",
 		Address:     fmt.Sprintf("localhost:%d", gPort),
 		DialOptions: service.dialOptions,
@@ -268,13 +309,15 @@ func (service *Service) initGRPC(ctx context.Context) error {
 	// ============================= Initialize grpc server =============================
 	// Add transport credentials if secure option is passed
 	if service.options.TLSEnabled {
-		creds, err := credentials.NewServerTLSFromFile(service.options.TlSCertFile, service.options.TlSKeyFile)
-		if err != nil {
-			return fmt.Errorf("failed to create grpc server tls credentials: %v", err)
+		if len(service.serverOptions) == 0 {
+			creds, err := credentials.NewServerTLSFromFile(service.options.TlSCertFile, service.options.TlSKeyFile)
+			if err != nil {
+				return fmt.Errorf("failed to create grpc server tls credentials: %v", err)
+			}
+			service.serverOptions = append(
+				service.serverOptions, grpc.Creds(creds),
+			)
 		}
-		service.serverOptions = append(
-			service.serverOptions, grpc.Creds(creds),
-		)
 	}
 
 	// Append interceptors as server options

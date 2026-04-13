@@ -12,6 +12,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+func TestGenTokenRejectsNilPayload(t *testing.T) {
+	api := NewAPI([]byte("secret"), "issuer", "audience")
+
+	_, err := api.GenToken(context.Background(), nil, time.Now().Add(time.Hour))
+	if err == nil || !strings.Contains(err.Error(), "nil payload") {
+		t.Fatalf("GenToken() error = %v, want nil payload error", err)
+	}
+}
+
 func TestGenTokenV2(t *testing.T) {
 	api := NewAPI([]byte("secret"), "issuer", "audience")
 	payload := &Payload{
@@ -62,6 +71,16 @@ func TestAuthenticator_NilPayload(t *testing.T) {
 
 	// This should NOT panic
 	_ = claims.ID
+}
+
+func TestGetClaimsRequiresPayload(t *testing.T) {
+	api := NewAPI([]byte("secret"), "issuer", "audience")
+	ctx := context.WithValue(context.Background(), claimsKey, &Claims{})
+
+	_, err := api.GetClaims(ctx)
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("GetClaims() status code = %v, want %v", status.Code(err), codes.Unauthenticated)
+	}
 }
 
 func TestAuthorizeGroups(t *testing.T) {
@@ -230,6 +249,24 @@ func TestAuthenticator(t *testing.T) {
 		}
 	})
 
+	t.Run("Rejects Unexpected Signing Method", func(t *testing.T) {
+		token := jwt.NewWithClaims(jwt.SigningMethodNone, &Claims{
+			Payload: &Payload{ID: "user-1"},
+		})
+		tokenStr, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
+		if err != nil {
+			t.Fatalf("failed to sign token: %v", err)
+		}
+
+		md := metadata.Pairs("authorization", "Bearer "+tokenStr)
+		ctx := metadata.NewIncomingContext(context.Background(), md)
+
+		_, err = api.Authenticator(ctx)
+		if status.Code(err) != codes.Unauthenticated {
+			t.Fatalf("Authenticator() status code = %v, want %v", status.Code(err), codes.Unauthenticated)
+		}
+	})
+
 	t.Run("With PayloadProvider", func(t *testing.T) {
 		api.SetPayloadProvider(&mockPayloadProvider{
 			getPayloadFunc: func(ctx context.Context, id string) (*Payload, error) {
@@ -253,6 +290,24 @@ func TestAuthenticator(t *testing.T) {
 		}
 		if claims.ExternalID != "external-123" {
 			t.Errorf("expected ExternalID external-123, got %s", claims.ExternalID)
+		}
+	})
+
+	t.Run("PayloadProviderFailureFailsAuthentication", func(t *testing.T) {
+		api.SetPayloadProvider(&mockPayloadProvider{
+			getPayloadFunc: func(ctx context.Context, id string) (*Payload, error) {
+				return nil, status.Error(codes.Internal, "lookup failed")
+			},
+		})
+		defer api.SetPayloadProvider(nil)
+
+		tokenStr, _ := api.GenToken(context.Background(), &Payload{ID: "user-3"}, time.Now().Add(time.Hour))
+		md := metadata.Pairs("authorization", "Bearer "+tokenStr)
+		ctx := metadata.NewIncomingContext(context.Background(), md)
+
+		_, err := api.Authenticator(ctx)
+		if status.Code(err) != codes.Internal {
+			t.Fatalf("Authenticator() status code = %v, want %v", status.Code(err), codes.Internal)
 		}
 	})
 }

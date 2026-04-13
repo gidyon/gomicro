@@ -14,7 +14,8 @@ func TestParseQuery(t *testing.T) {
 	}{
 		{name: "1", args: args{query: "hello goog friend", stopWords: []string{"good"}}, want: "hello* goog* friend*"},
 		{name: "2", args: args{query: "hello good friend", stopWords: []string{"good"}}, want: "hello* friend*"},
-		{name: "2", args: args{query: "hello good friend", stopWords: []string{"good "}}, want: "hello* good* friend*"},
+		{name: "3", args: args{query: "hello good friend", stopWords: []string{"good "}}, want: "hello* good* friend*"},
+		{name: "4", args: args{query: " hello   world ", stopWords: nil}, want: "hello* world*"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

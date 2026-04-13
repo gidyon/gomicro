@@ -83,6 +83,9 @@ func Init(lvl int, timeFormat string) error {
 
 // ZapGrpcLoggerV2 wraps a zap logger into a grpc LoggerV2
 func ZapGrpcLoggerV2(logger *zap.Logger) grpclog.LoggerV2 {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &zapGrpcLoggerV2{logger: logger}
 }
 

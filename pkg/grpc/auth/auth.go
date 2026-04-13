@@ -31,7 +31,7 @@ type PayloadProvider interface {
 	GetPayload(ctx context.Context, id string) (*Payload, error)
 }
 
-// NewAPI creates a jwt authentication and authorization API using HS256 algorithm
+// NewAPI creates a JWT authentication and authorization helper using HS256.
 func NewAPI(signingKey []byte, issuer, audience string) *API {
 
 	// Validation
@@ -73,13 +73,13 @@ func (api *API) SetPayloadProvider(provider PayloadProvider) {
 //
 // It is expected that before calling this method, Authentication ought to have happened.
 func (api *API) AuthorizeGroups(ctx context.Context, groups ...string) (*Payload, error) {
-	claims, ok := ctx.Value(claimsKey).(*Claims)
-	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "no claims found in token")
+	claims, err := claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// check if group match
-	err := matchGroup(claims.Payload.Group, groups)
+	err = matchGroup(claims.Payload.Group, groups)
 	if err != nil {
 		// check with roles
 		err = matchGroups(claims.Roles, groups)
@@ -102,9 +102,9 @@ func (api *API) AuthorizeGroups(ctx context.Context, groups ...string) (*Payload
 //
 // It is expected that before calling this method, Authentication ought to have happened.
 func (api *API) AuthorizeIds(ctx context.Context, ids ...string) (*Payload, error) {
-	claims, ok := ctx.Value(claimsKey).(*Claims)
-	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "no claims found in token")
+	claims, err := claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, id := range ids {
@@ -116,17 +116,17 @@ func (api *API) AuthorizeIds(ctx context.Context, ids ...string) (*Payload, erro
 	return nil, status.Errorf(codes.PermissionDenied, "permission denied: actor id %s is not in allowed list [%s]", claims.ID, strings.Join(ids, ", "))
 }
 
-// AddAdminGroups adds admin groups
+// AddAdminGroups appends groups treated as administrator groups.
 func (api *API) AddAdminGroups(groups ...string) {
 	api.adminsGroup = append(api.adminsGroup, groups...)
 }
 
-// AddAdminGroups adds super admin groups
+// AddSuperAdminGroups appends groups treated as super-administrator groups.
 func (api *API) AddSuperAdminGroups(groups ...string) {
 	api.superAdmins = append(api.superAdmins, groups...)
 }
 
-// AdminGroups retrieves Admins groups registered.
+// AdminGroups returns the configured admin and super-admin groups.
 func (api *API) AdminGroups() []string {
 	groups := make([]string, 0, len(api.adminsGroup)+len(api.superAdmins))
 	groups = append(groups, api.adminsGroup...)
@@ -134,22 +134,22 @@ func (api *API) AdminGroups() []string {
 	return groups
 }
 
-// IsAdmin checks whether the provided group belongs to the Admins Groups.
+// IsAdmin reports whether group is in any configured admin group.
 func (api *API) IsAdmin(group string) bool {
 	return matchGroup(group, api.AdminGroups()) == nil
 }
 
-// IsAdmin checks whether the provided group belongs to the Super Admin Groups.
+// IsSuperAdmin reports whether group is in any configured super-admin group.
 func (api *API) IsSuperAdmin(group string) bool {
 	return matchGroup(group, api.superAdmins) == nil
 }
 
-// IsGroupAllowed checks whether group is in the list of allowed groups.
+// IsGroupAllowed reports whether group is in allowedGroups.
 func (api *API) IsGroupAllowed(group string, allowedGroups ...string) bool {
 	return matchGroup(group, allowedGroups) == nil
 }
 
-// GetSigningKey retrieves the signing key registered for the auth instance
+// GetSigningKey returns the signing key configured for the API.
 func (api *API) GetSigningKey() []byte {
 	return api.signingKey
 }
@@ -175,29 +175,21 @@ func (api *API) GenTokenFromClaims(ctx context.Context, claims *Claims, expirati
 	return api.genTokenV2(ctx, claims, expirationTime.Unix(), api.signingKey)
 }
 
-// GetPayload retrives Payload from Claims in claimsKey of the Context
+// GetPayload returns the authenticated payload stored in ctx.
 func (api *API) GetPayload(ctx context.Context) (*Payload, error) {
-	claims, ok := ctx.Value(claimsKey).(*Claims)
-	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "no claims found in token")
+	claims, err := claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	return claims.Payload, nil
 }
 
-// GetClaims retrives claims by reading the value of claimsKey in the Context
+// GetClaims returns the authenticated claims stored in ctx.
 func (api *API) GetClaims(ctx context.Context) (*Claims, error) {
-	claims, ok := ctx.Value(claimsKey).(*Claims)
-	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "no claims found in token")
-	}
-
-	return claims, nil
+	return claimsFromContext(ctx)
 }
 
-// GetClaimsFromJwt retrives claims by parsing the jwt string.
-//
-// It uses the reciever SigningKey during parsing.
+// GetClaimsFromJwt parses a token string using the API signing key.
 func (api *API) GetClaimsFromJwt(jwt string) (*Claims, error) {
 	claims, err := api.parseToken(jwt, api.signingKey)
 	if err != nil {
@@ -207,12 +199,12 @@ func (api *API) GetClaimsFromJwt(jwt string) (*Claims, error) {
 	return claims, nil
 }
 
-// GetMetadataFromJwt creates a metadata.MD object from jwt string.
+// GetMetadataFromJwt constructs incoming gRPC metadata for a bearer token.
 func (api *API) GetMetadataFromJwt(jwt string) (metadata.MD, error) {
 	return metadata.Pairs(Header(), fmt.Sprintf("%s %s", Scheme(), jwt)), nil
 }
 
-// GetMetadataFromCtx retrieves metadata.MD object from Context
+// GetMetadataFromCtx returns incoming gRPC metadata from ctx, or an empty map if none exists.
 func (api *API) GetMetadataFromCtx(ctx context.Context) metadata.MD {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -235,12 +227,19 @@ func (api *API) Authenticator(ctx context.Context) (context.Context, error) {
 	return api.authenticate(ctx, api.signingKey)
 }
 
-// AuthenticatorWithKey works like Authenticator but allow users to pass in custome key for decoding jwt data
+// AuthenticatorWithKey behaves like Authenticator but uses the supplied key.
 func (api *API) AuthenticatorWithKey(ctx context.Context, signingKey []byte) (context.Context, error) {
 	return api.authenticate(ctx, signingKey)
 }
 
 func (api *API) authenticate(ctx context.Context, signingKey []byte) (context.Context, error) {
+	if ctx == nil {
+		return nil, status.Error(codes.Unauthenticated, "missing context")
+	}
+	if len(signingKey) == 0 {
+		return nil, status.Error(codes.Unauthenticated, "missing signing key")
+	}
+
 	token, err := grpc_auth.AuthFromMD(ctx, "bearer")
 	if err != nil {
 		return nil, err
@@ -253,7 +252,11 @@ func (api *API) authenticate(ctx context.Context, signingKey []byte) (context.Co
 
 	// Fetch additional payload data if a provider is configured and ID is present
 	if api.payloadProvider != nil && claims.Payload != nil && claims.ID != "" {
-		if fullPayload, err := api.payloadProvider.GetPayload(ctx, claims.ID); err == nil && fullPayload != nil {
+		fullPayload, err := api.payloadProvider.GetPayload(ctx, claims.ID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "load auth payload: %v", err)
+		}
+		if fullPayload != nil {
 			claims.Payload.Names = fullPayload.Names
 			claims.Payload.PhoneNumber = fullPayload.PhoneNumber
 			claims.Payload.EmailAddress = fullPayload.EmailAddress
@@ -285,6 +288,9 @@ func (api *API) parseToken(tokenString string, signingKey []byte) (claims *Claim
 		tokenString,
 		&Claims{Payload: &Payload{}},
 		func(token *jwt.Token) (interface{}, error) {
+			if token.Method == nil || token.Method.Alg() != api.signingMethod.Alg() {
+				return nil, fmt.Errorf("unexpected signing method %q", token.Header["alg"])
+			}
 			return signingKey, nil
 		},
 	)
@@ -321,4 +327,19 @@ func matchGroups(claimGroups []string, groups []string) error {
 		}
 	}
 	return status.Errorf(codes.PermissionDenied, "permission denied: none of the groups [%s] are in allowed list [%s]", strings.Join(claimGroups, ", "), strings.Join(groups, ", "))
+}
+
+func claimsFromContext(ctx context.Context) (*Claims, error) {
+	if ctx == nil {
+		return nil, status.Error(codes.Unauthenticated, "no claims found in token")
+	}
+
+	claims, ok := ctx.Value(claimsKey).(*Claims)
+	if !ok || claims == nil {
+		return nil, status.Error(codes.Unauthenticated, "no claims found in token")
+	}
+	if claims.Payload == nil {
+		return nil, status.Error(codes.Unauthenticated, "no claims payload found in token")
+	}
+	return claims, nil
 }

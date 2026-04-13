@@ -9,16 +9,19 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-// codeToLevel redirects OK to DEBUG level logging instead of INFO
-// This is example how you can log several gRPC code results
+// codeToLevel maps gRPC status codes to zap log levels.
 func codeToLevel(code codes.Code) zapcore.Level {
 	return grpc_zap.DefaultCodeToLevel(code)
 }
 
-// AddLogging returns grpc.Server config option that turn on logging.
+// AddLogging returns unary and stream interceptors for structured gRPC logging.
 func AddLogging(
 	logger *zap.Logger,
 ) ([]grpc.UnaryServerInterceptor, []grpc.StreamServerInterceptor) {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+
 	// Shared options for the logger, with a custom gRPC code to log level function.
 	o := []grpc_zap.Option{
 		grpc_zap.WithLevels(codeToLevel),

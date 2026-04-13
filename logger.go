@@ -3,6 +3,7 @@ package gomicro
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"google.golang.org/grpc/grpclog"
 
@@ -10,11 +11,17 @@ import (
 )
 
 type logger struct {
-	log zerolog.Logger
+	log   zerolog.Logger
+	level zerolog.Level
 }
 
-// NewLogger creates a grpc logger using zerolog
+// NewLogger creates a grpclog.LoggerV2 backed by zerolog.
+// If serviceName is blank, "app" is used.
 func NewLogger(serviceName string, level zerolog.Level) grpclog.LoggerV2 {
+	if strings.TrimSpace(serviceName) == "" {
+		serviceName = "app"
+	}
+
 	log := zerolog.New(os.Stdout).With().
 		Timestamp().
 		Caller().
@@ -22,7 +29,7 @@ func NewLogger(serviceName string, level zerolog.Level) grpclog.LoggerV2 {
 		Str("service_name", serviceName).
 		Logger().
 		Level(level)
-	return &logger{log: log}
+	return &logger{log: log, level: level}
 }
 
 func (l *logger) Info(args ...interface{}) {
@@ -73,5 +80,9 @@ func (l *logger) Fatalln(args ...interface{}) {
 }
 
 func (l *logger) V(level int) bool {
-	return true
+	if l == nil {
+		return false
+	}
+
+	return zerolog.Level(level) >= l.level
 }
